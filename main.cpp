@@ -1,9 +1,18 @@
 #include <iostream>
+#include <sstream>
 #include <string>
+#include <fstream>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+
+struct ParsedShader {
+  std::string vs;
+  std::string fs;
+};
+
 static unsigned int create_shader(const std::string& vertex_shader, const std::string& fragment_shader);
+static ParsedShader parse_shader_file(const std::string& path);
 
 int main(void) {
   GLFWwindow* window;
@@ -43,28 +52,8 @@ int main(void) {
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0); // for each attribute definition
 
- const std::string vertex_shader = R"glsl(
-  #version 330 core
-
-  layout(location = 0) in vec4 position;
-
-  void main(){
-    gl_Position = position;
-  }
-  )glsl"; 
-
-  const std::string fragment_shader = R"glsl(
-  #version 330 core
-
-  layout(location = 0) out vec4 color;
-
-  void main(){
-    color= vec4(1.0, 0.0, 0.0, 1.0);
-  }
-  
-  )glsl";
-
-  unsigned int shader = create_shader(vertex_shader, fragment_shader);
+  ParsedShader parsed_shader = parse_shader_file("res/shaders/basic.shader");
+  unsigned int shader = create_shader(parsed_shader.vs, parsed_shader.fs);
   glUseProgram(shader);
 
   while(!glfwWindowShouldClose(window)) {
@@ -85,6 +74,7 @@ int main(void) {
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
+  glDeleteProgram(shader);
   glfwTerminate();
   return 0;
 }
@@ -124,3 +114,31 @@ static unsigned int create_shader(const std::string& vertex_shader, const std::s
   glDeleteShader(fs);
   return program;
 };
+
+static ParsedShader parse_shader_file(const std::string& path) {
+
+  enum class ShaderType {
+    NONE = -1, VERTEX = 0, FRAGMENT = 1
+  };
+  std::ifstream stream(path);
+  std::stringstream ss[2];
+
+  std::string line;
+  ShaderType type = ShaderType::NONE;
+  while(std::getline(stream, line)) {
+    if(line.find("#shader") != std::string::npos) {
+      if(line.find("vertex") != std::string::npos) {
+        type = ShaderType::VERTEX;
+      } else if(line.find("fragment") != std::string::npos) {
+        type = ShaderType::FRAGMENT;
+      }
+    } else {
+      ss[(int)type] << line << '\n';
+    }
+  }
+
+  return ParsedShader{
+    .vs = ss[(int)ShaderType::VERTEX].str(),
+    .fs = ss[(int)ShaderType::FRAGMENT].str(),
+  };
+}
